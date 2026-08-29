@@ -1,10 +1,11 @@
 """Standalone 2D drawing: plate profile reproduced from the dimensioned sketch (mm).
 
-The sketch over-constrains the profile: the 144 deg / 140 deg chamfer angles do
-not close against the linear dimension chain (23+6+10+10 = 8+41 = 49 wide).
-The profile is therefore built from the linear dimensions plus the 41 deg
-bottom-left chamfer; the two chamfer angle dimensions are reproduced as
-labelled annotations from the source sketch.
+The sketch over-constrains the profile: the top chain (23+6+10+10 = 49) and the
+bottom chain (8+41+4 = 53) disagree, and the 144 deg / 140 deg chamfer angles do
+not close against either. Per user direction the bottom edge 41 is taken as the
+true value, so the total width is 53 and the top-right segment is 14 in
+geometry while still labelled 10 as in the sketch; the two chamfer angle
+dimensions are reproduced as labelled annotations from the source sketch.
 """
 
 from __future__ import annotations
@@ -18,17 +19,18 @@ TOP_LEFT_W = 23.0        # top edge left of the slot
 SLOT_W = 6.0             # slot width
 SLOT_DEPTH = 14.0        # slot depth below the top edge
 CHAMFER_W1 = 10.0        # top edge between slot and chamfer start
-CHAMFER_W2 = 10.0        # top edge between chamfer start and right corner
+CHAMFER_W2_LABEL = 10.0  # sketch label of the top-right segment (14 in geometry)
 LEFT_H = 28.0            # left vertical edge
-BOTTOM_W = 41.0          # bottom edge
+BOTTOM_W = 41.0          # bottom edge (true value, per user direction)
 RIGHT_H = 34.0           # right vertical edge above the notch
 NOTCH_W = 4.0            # bottom-right notch width
 NOTCH_H = 6.0            # bottom-right notch height
 CHAMFER_ANGLE_DEG = 41.0  # bottom-left chamfer, measured from the vertical
 
-# Derived geometry.
-TOTAL_W = TOP_LEFT_W + SLOT_W + CHAMFER_W1 + CHAMFER_W2          # 49
-CHAMFER_RUN = TOTAL_W - BOTTOM_W                                 # 8 horizontal
+# Derived geometry: bottom chain closes the width (8 + 41 + 4 = 53).
+CHAMFER_RUN = 8.0        # horizontal projection of the bottom-left chamfer
+TOTAL_W = CHAMFER_RUN + BOTTOM_W + NOTCH_W                       # 53
+CHAMFER_W2 = TOTAL_W - TOP_LEFT_W - SLOT_W - CHAMFER_W1          # 14
 CHAMFER_RISE = CHAMFER_RUN / math.tan(math.radians(CHAMFER_ANGLE_DEG))
 TOP_Y = LEFT_H + CHAMFER_RISE
 SLOT_BOT_Y = TOP_Y - SLOT_DEPTH
@@ -68,9 +70,13 @@ def gen_dxf():
         ((0, TOP_Y), (TOP_LEFT_W, TOP_Y)),
         (P_SLOT_L, (TOP_LEFT_W + SLOT_W, TOP_Y)),
         ((TOP_LEFT_W + SLOT_W, TOP_Y), P_CHAMFER_R),
-        (P_CHAMFER_R, P_TR),
     ):
         modelspace.add_linear_dim(base=(p2[0], top_dim_y), p1=p1, p2=p2, **dim_kwargs).render()
+    # Top-right segment: 14 in geometry, labelled 10 as in the sketch.
+    modelspace.add_linear_dim(
+        base=(P_TR[0], top_dim_y), p1=P_CHAMFER_R, p2=P_TR,
+        text=str(int(CHAMFER_W2_LABEL)), **dim_kwargs,
+    ).render()
 
     # Left vertical edge (28) and slot depth (14).
     modelspace.add_linear_dim(base=(-7, LEFT_H / 2 + CHAMFER_RISE), p1=P_TL, p2=P_CHAMFER_L, angle=90, **dim_kwargs).render()
@@ -81,12 +87,8 @@ def gen_dxf():
     modelspace.add_linear_dim(base=(TOTAL_W - NOTCH_W / 2, NOTCH_H + 4), p1=P_NOTCH_M, p2=P_NOTCH_TR, **dim_kwargs).render()
     modelspace.add_linear_dim(base=(TOTAL_W + 4, NOTCH_H / 2), p1=P_NOTCH_B, p2=P_NOTCH_M, angle=90, **dim_kwargs).render()
 
-    # Bottom edge. The sketch labels it 41 while the linear chain closes at 37
-    # (49 - 4 notch - 8 chamfer run); reproduce the sketch label verbatim.
-    modelspace.add_linear_dim(
-        base=((CHAMFER_RUN + TOTAL_W) / 2, -7), p1=P_BL, p2=P_NOTCH_B,
-        text="41", **dim_kwargs,
-    ).render()
+    # Bottom edge (41, the true value).
+    modelspace.add_linear_dim(base=((CHAMFER_RUN + TOTAL_W) / 2, -7), p1=P_BL, p2=P_NOTCH_B, **dim_kwargs).render()
 
     # 41 deg chamfer angle at the bottom-left (downward vertical vs chamfer).
     # The sketch's 41 deg is the chamfer-to-horizontal angle; the drawn arc
@@ -115,11 +117,11 @@ def gen_dxf():
     # Chamfer angle at the top-right corner (sketch labels it 140 deg).
     ext_dir = (math.cos(math.radians(140.0)), math.sin(math.radians(140.0)))
     modelspace.add_angular_dim_3p(
-        base=(53.0, 38.0),
+        base=(P_TR[0] + 4.0, 38.0),
         center=P_TR,
         p1=(TOTAL_W + 10, CHAMFER_TOP_Y),
         p2=(P_TR[0] + 10 * ext_dir[0], P_TR[1] + 10 * ext_dir[1]),
-        location=(53.0, 38.0),
+        location=(P_TR[0] + 4.0, 38.0),
         text="140%%d",
         dxfattribs={"layer": "DIM"},
     ).render()
